@@ -4,7 +4,7 @@
 -module(cookie_session).
 -author('Vladimir Dronnikov <dronnikov@gmail.com>').
 
--export([get/4, set/5, drop/2]).
+-export([get/2, set/3, drop/2]).
 
 -define(INFO, error_logger:info_report).
 -define(ERROR, error_logger:error_report).
@@ -121,19 +121,15 @@ decode_base64(Bin, Secret, Ttl) ->
 %% N.B. undefined Session means drop session.
 %%
 
--spec set(binary(), any(), binary(), non_neg_integer(), any()) ->
-  {Cookie :: binary(), Req :: any()}.
+-spec set(
+    Session :: any(),
+    { Name :: binary(), Secret :: binary(), MaxAge :: non_neg_integer()},
+    Req :: any()
+  ) -> { Cookie :: binary(), Req :: any() }.
 
-set(Name, Session, Secret, MaxAge, Req) ->
+set(Session, {Name, Secret, MaxAge}, Req) ->
   % serialize session
   Cookie = encode_base64(Session, Secret),
-  % calculate session time-to-live
-  Age = case Session of
-      % expire session
-      undefined -> 0;
-      % renew session expiry
-      _Else -> MaxAge
-    end,
   % write session cookie
   Req2 = cowboy_req:set_resp_cookie(Name, Cookie, [
       http_only,
@@ -145,9 +141,12 @@ set(Name, Session, Secret, MaxAge, Req) ->
 %% @doc Destroy session by writing expired session cookie Name.
 %%
 
--spec drop(binary(), any()) -> Req :: any().
+-spec drop(
+    { Name :: binary(), any(), any() },
+    any()
+  ) -> Req :: any().
 
-drop(Name, Req) ->
+drop({Name, _Secret, _MaxAge}, Req) ->
   % write already expired session cookie
   cowboy_req:set_resp_cookie(Name, <<>>, [
       http_only,
@@ -159,10 +158,12 @@ drop(Name, Req) ->
 %% time-to-live MaxAge from cowboy request Req.
 %%
 
--spec get(binary(), binary(), non_neg_integer(), any()) ->
-          {Session :: any(), Cookie :: binary(), Req :: any()}.
+-spec get(
+    { Name :: binary(), Secret :: binary(), MaxAge :: non_neg_integer() },
+    any()
+  ) -> { Session :: any(), Cookie :: binary(), Req :: any() }.
 
-get(Name, Secret, MaxAge, Req) ->
+get({Name, Secret, MaxAge}, Req) ->
   % get cookie
   {Cookie, Req2} = cowboy_req:cookie(Name, Req),
   % deserialize cookie into session

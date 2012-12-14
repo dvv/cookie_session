@@ -12,13 +12,14 @@ A typical use case in case of [cowboy](/extend/cowboy) Web server:
 handle(Req, State) ->
 
   % session params
-  CookieName = <<"s">>,
-  Secret = <<"FOO">>,
-  MaxAge = 1000, % sessions older than 1000 seconds are expired
-  Default = {user, guest},
+  SessionOpts = {
+      <<"s">>,    % cookie name
+      <<"FOO">>,  % cipher secret
+      1000        % session time-to-live in seconds, older sessions are expired
+    },
 
   % get previous session
-  {Session, Cookie, Req2} = cookie_session:get(CookieName, Secret, MaxAge, Req),
+  {Session, Cookie, Req2} = cookie_session:get(SessionOpts, Req),
 
   % do the job
   % ...
@@ -28,11 +29,9 @@ handle(Req, State) ->
   {Cookie2, Req4} = case KeepSession of
       true ->
         Session2 = {foo, bar},
-        cookie_session:set(CookieName, Session2, Secret, MaxAge, Req3);
+        cookie_session:set(Session2, SessionOpts, Req3);
       false ->
-        cookie_session:drop(CookieName, Req3)
-        % or effectively the same
-        % cookie_session:set(CookieName, undefined, Secret, MaxAge, Req3)
+        cookie_session:drop(SessionOpts, Req3)
     end,
 
   % respond
