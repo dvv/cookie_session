@@ -133,7 +133,7 @@ set(Session, {Name, Secret, MaxAge}, Req) ->
   % write session cookie
   Req2 = cowboy_req:set_resp_cookie(Name, Cookie, [
       http_only,
-      {max_age, Age}
+      {max_age, MaxAge}
     ], Req),
   {Cookie, Req2}.
 
