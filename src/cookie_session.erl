@@ -123,15 +123,16 @@ decode_base64(Bin, Secret, Ttl) ->
 
 -spec set(
     Session :: any(),
-    { Name :: binary(), Secret :: binary(), MaxAge :: non_neg_integer()},
+    { Name :: binary(), Secret :: binary(), MaxAge :: non_neg_integer() },
     Req :: any()
   ) -> { Cookie :: binary(), Req :: any() }.
 
 set(Session, {Name, Secret, MaxAge}, Req) ->
   % serialize session
   Cookie = encode_base64(Session, Secret),
-  % write session cookie
-  Req2 = cowboy_req:set_resp_cookie(Name, Cookie, [
+  % N.B. base64 may end with equal signs which are invalid for cookie value
+  % so we always quote the value.
+  Req2 = cowboy_req:set_resp_cookie(Name, << $", Cookie/binary, $" >>, [
       http_only,
       {max_age, MaxAge}
     ], Req),
