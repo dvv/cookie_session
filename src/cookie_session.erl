@@ -123,18 +123,23 @@ decode_base64(Bin, Secret, Ttl) ->
 
 -spec set(
     Session :: any(),
-    { Name :: binary(), Secret :: binary(), MaxAge :: non_neg_integer() },
+    { Name :: binary(), Secret :: binary(),
+      MaxAge :: non_neg_integer(), Path :: binary() },
     Req :: any()
   ) -> { Cookie :: binary(), Req :: any() }.
 
 set(Session, {Name, Secret, MaxAge}, Req) ->
+  set(Session, {Name, Secret, MaxAge, <<"/">>}, Req);
+
+set(Session, {Name, Secret, MaxAge, Path}, Req) ->
   % serialize session
   Cookie = encode_base64(Session, Secret),
   % N.B. base64 may end with equal signs which are invalid for cookie value
   % so we always quote the value.
   Req2 = cowboy_req:set_resp_cookie(Name, << $", Cookie/binary, $" >>, [
       http_only,
-      {max_age, MaxAge}
+      {max_age, MaxAge},
+      {path, Path}
     ], Req),
   {Cookie, Req2}.
 
@@ -143,15 +148,19 @@ set(Session, {Name, Secret, MaxAge}, Req) ->
 %%
 
 -spec drop(
-    { Name :: binary(), any(), any() },
+    { Name :: binary(), any(), any(), Path :: binary() },
     any()
   ) -> Req :: any().
 
 drop({Name, _Secret, _MaxAge}, Req) ->
+  drop({Name, _Secret, _MaxAge, <<"/">>}, Req);
+
+drop({Name, _Secret, _MaxAge, Path}, Req) ->
   % write already expired session cookie
   cowboy_req:set_resp_cookie(Name, <<>>, [
       http_only,
-      {max_age, 0}
+      {max_age, 0},
+      {path, Path}
     ], Req).
 
 %%
@@ -160,11 +169,15 @@ drop({Name, _Secret, _MaxAge}, Req) ->
 %%
 
 -spec get(
-    { Name :: binary(), Secret :: binary(), MaxAge :: non_neg_integer() },
+    { Name :: binary(), Secret :: binary(),
+        MaxAge :: non_neg_integer(), Path :: binary() },
     any()
   ) -> { Session :: any(), Cookie :: binary(), Req :: any() }.
 
 get({Name, Secret, MaxAge}, Req) ->
+  get({Name, Secret, MaxAge, <<"/">>}, Req);
+
+get({Name, Secret, MaxAge, _Path}, Req) ->
   % get cookie
   {Cookie, Req2} = cowboy_req:cookie(Name, Req),
   % deserialize cookie into session
