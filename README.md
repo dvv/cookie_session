@@ -1,7 +1,7 @@
 Cookie Session
 ==============
 
-Library to manage a moderate sized sessions inside secure signed encrypted cookies.
+Library for managing a moderately sized sessions inside secure signed encrypted cookies.
 
 Usage
 --------------
@@ -15,7 +15,8 @@ handle(Req, State) ->
   SessionOpts = {
       <<"s">>,    % cookie name
       <<"FOO">>,  % cipher secret
-      1000        % session time-to-live in seconds, older sessions are expired
+      1000,       % session time-to-live in seconds, older sessions are expired
+      <<"/">>     % cookie path
     },
 
   % get previous session
@@ -38,6 +39,8 @@ handle(Req, State) ->
   {ok, Req5} = cowboy_req:reply(Status, Headers, Body, Req4),
   {ok, Req5, State}.
 ```
+
+A cowboy HTTP handler is also provided [here](cookie_session/src/cookie_session_cowboy.erl).
 
 [License](cookie_session/blob/master/LICENSE.txt)
 -------

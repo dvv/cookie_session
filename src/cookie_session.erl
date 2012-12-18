@@ -1,6 +1,7 @@
 %%
 %% @doc Manage sessions in signed encrypted cookies.
 %%
+
 -module(cookie_session).
 -author('Vladimir Dronnikov <dronnikov@gmail.com>').
 
@@ -10,7 +11,9 @@
 -define(ERROR, error_logger:error_report).
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Serialize Term, encrypt and sign the result with Secret.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec encode(Term :: any(), Secret :: binary()) -> Cipher :: binary().
@@ -24,9 +27,11 @@ encode(Term, Secret) ->
   <<Sig/binary, Time/binary, Enc/binary>>.
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Given a signed encrypted binary, check the signature,
 %% uncrypt and deserialize into original Term.
 %% Check it timestamp encoded into the data is not older than Ttl.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec decode(
@@ -35,37 +40,41 @@ encode(Term, Secret) ->
     Ttl :: non_neg_integer()
   ) -> Term :: any().
 
+%% @todo how do we know time is 10 octets?
+
 decode(<<Sig:32/binary, Time:10/binary, Enc/binary>>, Secret, Ttl) ->
   case sign(<<Time/binary, Enc/binary>>, Secret) of
-    % signature ok?
-    Sig ->
-      Bin = decrypt(Enc, Secret),
-      % deserialize
-      try binary_to_term(Bin, [safe]) of
-        Term ->
-          % not yet expired?
-          {MegaSecs, Secs, _} = erlang:now(),
-          Now = MegaSecs * 1000000 + Secs,
-          Expires = list_to_integer(binary_to_list(Time)) + Ttl,
-          case Expires > Now of
-            true ->
-              {ok, Term};
-            false ->
-              {error, expired}
-          end
-      catch _:_ ->
-          {error, badarg}
-      end;
-    _ ->
-      {error, forged}
-  end;
+      % signature ok?
+      Sig ->
+        Bin = decrypt(Enc, Secret),
+        % deserialize
+        try binary_to_term(Bin, [safe]) of
+            Term ->
+              % not yet expired?
+              {MegaSecs, Secs, _} = erlang:now(),
+              Now = MegaSecs * 1000000 + Secs,
+              Expires = list_to_integer(binary_to_list(Time)) + Ttl,
+              case Expires > Now of
+                  true ->
+                    {ok, Term};
+                  false ->
+                    {error, expired}
+                end
+          catch _:_ ->
+              {error, badarg}
+          end;
+      _ ->
+        {error, forged}
+    end;
 
 %% N.B. unmatched binaries are forged
 decode(Bin, _, _) when is_binary(Bin) ->
   {error, forged}.
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Get 32-byte SHA1 sum of Data salted with Secret.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec sign(binary(), binary()) -> binary().
@@ -74,7 +83,9 @@ sign(Data, Secret) ->
   crypto:sha256([Data, Secret]).
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Encrypt Bin using Secret.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec encrypt(binary(), binary()) -> binary().
@@ -84,7 +95,9 @@ encrypt(Bin, Secret) ->
   crypto:aes_cfb_128_encrypt(Key, IV, Bin).
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Decrypt Bin using Secret.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec decrypt(binary(), binary()) -> binary().
@@ -94,9 +107,9 @@ decrypt(Bin, Secret) ->
   crypto:aes_cfb_128_decrypt(Key, IV, Bin).
 
 %%
-%% ------------------------------------------------------------------
+%% -----------------------------------------------------------------------------
 %% Conversion helpers
-%% ------------------------------------------------------------------
+%% -----------------------------------------------------------------------------
 %%
 
 encode_base64(Term, Secret) ->
@@ -109,16 +122,16 @@ decode_base64(Bin, Secret, Ttl) ->
   decode(base64:decode(Bin), Secret, Ttl).
 
 %%
-%% ------------------------------------------------------------------
+%% -----------------------------------------------------------------------------
 %% Cowboy handler helpers
-%% ------------------------------------------------------------------
+%% -----------------------------------------------------------------------------
 %%
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Store term Session into cookie Name secured with Secret with
 %% time-to-live MaxAge to cowboy request Req.
-%%
-%% N.B. undefined Session means drop session.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec set(
@@ -136,7 +149,7 @@ set(Session, {Name, Secret, MaxAge, Path}, Req) ->
   Cookie = encode_base64(Session, Secret),
   % N.B. base64 may end with equal signs which are invalid for cookie value
   % so we always quote the value.
-  Req2 = cowboy_req:set_resp_cookie(Name, << $", Cookie/binary, $" >>, [
+  Req2 = cowboy_req:set_resp_cookie(Name, Cookie, [
       http_only,
       {max_age, MaxAge},
       {path, Path}
@@ -144,7 +157,9 @@ set(Session, {Name, Secret, MaxAge, Path}, Req) ->
   {Cookie, Req2}.
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Destroy session by writing expired session cookie Name.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec drop(
@@ -164,8 +179,10 @@ drop({Name, _Secret, _MaxAge, Path}, Req) ->
     ], Req).
 
 %%
+%% -----------------------------------------------------------------------------
 %% @doc Restore session from cookie Name secured with Secret with
 %% time-to-live MaxAge from cowboy request Req.
+%% -----------------------------------------------------------------------------
 %%
 
 -spec get(
@@ -191,9 +208,9 @@ get({Name, Secret, MaxAge, _Path}, Req) ->
   {Session, Cookie, Req2}.
 
 %%
-%% ------------------------------------------------------------------
+%% -----------------------------------------------------------------------------
 %% Some unit tests
-%% ------------------------------------------------------------------
+%% -----------------------------------------------------------------------------
 %%
 
 -ifdef(TEST).
@@ -242,4 +259,3 @@ encode_test() ->
   check(decode_base64(encode_base64(Term, Secret), Secret, 1), {ok, Term}).
 
 -endif.
-
