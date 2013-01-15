@@ -1,3 +1,5 @@
+all: deps compile check test
+
 deps:
 	rebar get-deps
 
@@ -9,14 +11,19 @@ run: compile
 
 clean:
 	rebar clean
-	rm -fr ebin
+	rm -fr ebin .ct test/*.beam
 
 check:
 	rebar eunit skip_deps=true
 
+test:
+	#rebar ct
+	mkdir -p .ct
+	ct_run -dir test -logdir .ct -pa ebin
+
 dist: deps compile
 	echo TODO
 
-.PHONY: all deps compile check run clean dist
+.PHONY: all deps compile check test run clean dist
 .SILENT:
 

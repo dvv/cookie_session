@@ -1,5 +1,7 @@
 ebin
 deps
 .eunit
-log
+.ct
+logs
+test/*.beam
 erl_crash.dump

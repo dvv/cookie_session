@@ -3,7 +3,7 @@ Cookie Session
 
 Library for managing a moderately sized sessions inside secure signed encrypted cookies.
 
-Usage
+Typical usage
 --------------
 
 A typical use case in case of [cowboy](/extend/cowboy) Web server:
@@ -20,19 +20,19 @@ handle(Req, State) ->
     },
 
   % get previous session
-  {Session, Cookie, Req2} = cookie_session:get(SessionOpts, Req),
+  {Session, Req2} = cowboy_cookie_session:get_session(SessionOpts, Req),
 
   % do the job
   % ...
   {Status, Headers, Body, Req3} = {200, [], <<"OK">>, Req2},
 
   % set new session
-  {Cookie2, Req4} = case KeepSession of
+  Req4 = case KeepSession of
       true ->
         Session2 = {foo, bar},
-        cookie_session:set(Session2, SessionOpts, Req3);
+        cowboy_cookie_session:set_session(Session2, SessionOpts, Req3);
       false ->
-        cookie_session:drop(SessionOpts, Req3)
+        cowboy_cookie_session:set_session(undefined, SessionOpts, Req3)
     end,
 
   % respond
@@ -40,12 +40,60 @@ handle(Req, State) ->
   {ok, Req5, State}.
 ```
 
-A cowboy HTTP handler is also provided [here](cookie_session/src/cookie_session_cowboy.erl).
+Cowboy middleware
+--------------
+A cowboy middleware is also provided [here](cookie_session/blob/master/src/cowboy_cookie_session.erl).
+
+Protocol options passed to `cowboy:start_http/4` should contain:
+```erlang
+
+  ...
+
+  % middleware
+  {middlewares, [
+      cowboy_router,
+      cowboy_cookie_session, % <- middlewares below will have session meta in Req
+      cowboy_handler]},
+
+  % environment
+  {env, [
+
+    % session parameters
+    {session_opts, {
+        <<"sid">>,       % cookie name
+        <<"tOpcekpet">>, % encryption secret
+        1000,            % cookie time-to-live in seconds
+        <<"/">>}},       % cookie path
+    ...
+```
+
+Then in the handler:
+
+```erlang
+handle(Req, State) ->
+
+  % get previous session
+  {Session, Req2} = cowboy_req:meta(session, Req),
+
+  % do the job
+  % ...
+  {Status, Headers, Body, Req3} = {200, [], <<"OK">>, Req2},
+
+  % set new session
+  Session2 = {foo, bar},
+  Req4 = cowboy_cookie_session:set_session(Session2, Req3);
+
+  % respond
+  {ok, Req5} = cowboy_req:reply(Status, Headers, Body, Req4),
+  {ok, Req5, State}.
+```
+
+A cowboy middleware is also provided [here](cookie_session/blob/master/src/cowboy_cookie_session.erl).
 
 [License](cookie_session/blob/master/LICENSE.txt)
 -------
 
-Copyright (c) 2012 Vladimir Dronnikov <dronnikov@gmail.com>
+Copyright (c) 2013 Vladimir Dronnikov <dronnikov@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
