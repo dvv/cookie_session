@@ -2,25 +2,25 @@
 -author('Vladimir Dronnikov <dronnikov@gmail.com>').
 
 -behaviour(cowboy_middleware).
--export([execute/2, get_session/2, set_session/3, set_session/2]).
+-export([execute/2, get_session/2, set_session/3]).
 
 execute(Req, Env) ->
 
   % session_opts tuple is required in Env
-  {session_opts, CookieOpts} =
-      lists:keyfind(session_opts, 1, Env),
+  {session_opts, CookieOpts} = lists:keyfind(session_opts, 1, Env),
 
-  % get session
+  % get session from request
   {Session, Req2} = get_session(CookieOpts, Req),
+ 
+  % extract handler options
+  {handler_opts, HandlerOpts} = lists:keyfind(handler_opts, 1, Env),
+  % put session and session setter to handler options
+  HandlerOpts2 = [{session, Session, CookieOpts} | HandlerOpts],
+  % update handler_opts
+  Env2 = [{handler_opts, HandlerOpts2} | lists:keydelete(handler_opts, 1, Env)],
 
-  % set session setter
-  Req3 = cowboy_req:set_meta(session_setter, fun (NewSession, Req0) ->
-      set_session(NewSession, CookieOpts, Req0)
-    end, Req2),
-
-  % attach session to request
-  Req4 = cowboy_req:set_meta(session, Session, Req3),
-  {ok, Req4, Env}.
+  % set new environment
+  {ok, Req2, Env2}.
 
 %%
 %% Get session from cookie.
@@ -59,14 +59,3 @@ set_session(Session, {Name, Secret, MaxAge, Path}, Req) ->
   Cookie = termit:encode_base64(Session, Secret),
   cowboy_req:set_resp_cookie(Name, Cookie,
       [http_only, {max_age, MaxAge}, {path, Path}], Req).
-
-%%
-%% Set session to cookie, applies session setter bound to request.
-%%
-
--spec set_session(Session :: term(), Req :: binary()) ->
-    Req2 :: binary().
-
-set_session(Session, Req) ->
-  {Setter, Req2} = cowboy_req:meta(session_setter, Req),
-  Setter(Session, Req2).

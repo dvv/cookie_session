@@ -6,7 +6,9 @@ Library for managing a moderately sized sessions inside secure signed encrypted 
 Typical usage
 --------------
 
-A typical use case in case of [cowboy](/extend/cowboy) Web server:
+Take a look at [examples](cookie_session/tree/master/examples).
+
+A typical use case for [Cowboy](/extend/cowboy) Web server:
 
 ```erlang
 handle(Req, State) ->
@@ -42,7 +44,7 @@ handle(Req, State) ->
 
 Cowboy middleware
 --------------
-A cowboy middleware is also provided [here](cookie_session/blob/master/src/cowboy_cookie_session.erl).
+A [Cowboy](/extend/cowboy) middleware is also provided [here](cookie_session/blob/master/src/cowboy_cookie_session.erl).
 
 Protocol options passed to `cowboy:start_http/4` should contain:
 ```erlang
@@ -52,7 +54,7 @@ Protocol options passed to `cowboy:start_http/4` should contain:
   % middleware
   {middlewares, [
       cowboy_router,
-      cowboy_cookie_session, % <- middlewares below will have session meta in Req
+      cowboy_cookie_session,
       cowboy_handler]},
 
   % environment
@@ -70,27 +72,79 @@ Protocol options passed to `cowboy:start_http/4` should contain:
 Then in the handler:
 
 ```erlang
-handle(Req, State) ->
+init(_Transport, Req, Opts) ->
 
   % get previous session
-  {Session, Req2} = cowboy_req:meta(session, Req),
+  {session, Session, SessionOpts} = lists:keyfind(session, 1, Opts),
+  {ok, Req, {Session, SessionOpts}}.
+
+handle(Req, {Session, SessionOpts} = State) ->
 
   % do the job
   % ...
-  {Status, Headers, Body, Req3} = {200, [], <<"OK">>, Req2},
+  {Status, Headers, Body, Req2} = {200, [], <<"OK">>, Req},
+
+  % mangle the session
+  Session2 = [{foo, bar} | Session],
 
   % set new session
-  Session2 = {foo, bar},
-  Req4 = cowboy_cookie_session:set_session(Session2, Req3);
+  Req3 = cowboy_cookie_session:set_session(Session2, SessionOpts, Req2},
 
   % respond
-  {ok, Req5} = cowboy_req:reply(Status, Headers, Body, Req4),
-  {ok, Req5, State}.
+  {ok, Req4} = cowboy_req:reply(Status, Headers, Body, Req3),
+  {ok, Req4, State}.
 ```
 
-A cowboy middleware is also provided [here](cookie_session/blob/master/src/cowboy_cookie_session.erl).
+Elli middleware
+--------------
+An [Elli](/knutin/elli) middleware is also provided [here](cookie_session/blob/master/src/elli_cookie_session.erl).
+Note, that Elli doesn't provide cookie management means per se, and you'll need to depend on [elli_cookie](/drfloob/elli_cookie).
 
-[License](cookie_session/blob/master/LICENSE.txt)
+```erlang
+% session params
+SessionOpts = {
+    <<"s">>,    % cookie name
+    <<"FOO">>,  % cipher secret
+    1000,       % session time-to-live in seconds, older sessions are expired
+    <<"/">>     % cookie path
+  },
+
+% specify middleware layers
+Middleware = [{mods, [
+  % cookie session
+  {elli_cookie_session, SessionOpts},
+  ...
+]}],
+
+% start server
+elli:start_link([
+  {callback, elli_middleware},
+  {callback_args, Middleware},
+  ...
+]).
+```
+
+Then in the handler:
+
+```erlang
+handle(Req = #req{args = Args}, _Args) ->
+
+  % get previous session
+  {session, Session} = lists:keyfind(session, 1, Args),
+
+  % do the job
+  % ...
+  {Status, Headers, Body} = {200, [], <<"OK">>},
+
+  % mangle the session
+  Session2 = [{foo, bar} | Session],
+
+  % set new session
+  % NB: special return for honoring session
+  {with_session, Status, Headers, Body, Session2}.
+```
+
+License
 -------
 
 Copyright (c) 2013 Vladimir Dronnikov <dronnikov@gmail.com>
